@@ -35,15 +35,20 @@ def is_valid_number(number: str, base: int) -> bool:
         return False
 
 
-def convert_and_print(number: str, input_base: int, is_bold=False):
+###  def convert_and_print(number: str, input_base: int, is_bold=False):
+def convert_and_print(number: str, input_base: int, is_bold=False, output_bases=None):
     if not is_valid_number(number, input_base):
         console.print(
             f"[bold red]Error:[/] '{number}' is not a valid number in base {input_base}."
         )
-        sys.exit(1)
+        ####  sys.exit(1)
+        return
 
     decimal_value = int(number, input_base)
     for base, color in BASES:
+        if output_bases and base not in output_bases:
+            continue
+        prefix = PREFIXES[base]
         prefix = PREFIXES[base]
         base_name = BASE_NAMES[base]
         formatted_value = {
@@ -77,7 +82,14 @@ def main():
         parser = argparse.ArgumentParser(
             description="Convert a number from any base to all others."
         )
-        parser.add_argument("number", help="The number to be converted.")
+        ###  parser.add_argument("number", help="The number to be converted.")
+        parser.add_argument(
+            "number", nargs="+", help="The number(s) to be converted (space or comma separated)."
+        )
+        parser.add_argument(
+            "--out", "--output", dest="output", nargs="+",
+            help="Specify bases to output (e.g., 2 10 16 or hex dec)."
+        )
         for flag, base in BASE_MAP.items():
             parser.add_argument(
                 flag,
@@ -91,54 +103,116 @@ def main():
                 break
             if not cmd.strip():
                 continue
+            ####  try:
+            ####      args = parser.parse_args(cmd.split())
+            ####      input_number = args.number.replace(" ", "")
+            ####      specified_base = None
+
+            ####      # Determine which base flag was provided
+            ####      for flag, base in BASE_MAP.items():
+            ####          if getattr(args, flag.lstrip("-").replace("-", "_")):
+            ####              specified_base = base
+            ####              break
+
+            ####      for base, preffix in PREFIXES.items():
+            ####          if input_number.startswith(preffix):
+            ####              specified_base = base
+            ####              break
+
+            ####      if specified_base:
+            ####          convert_and_print(input_number, specified_base, is_bold=True)
+            ####      else:
+            ####          # Try all possible bases
+            ####          valid_bases = []
+            ####          for base in [16, 10, 8, 2]:
+            ####              if is_valid_number(input_number, base):
+            ####                  valid_bases.append(base)
+
+            ####          if not valid_bases:
+            ####              console.print(
+            ####                  "[bold red]Error:[/] The number is not valid in any supported base."
+            ####              )
+            ####              continue
+
+            ####          for base in valid_bases:
+            ####              if len(valid_bases) > 1:
+            ####                  console.print(
+            ####                      f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
+            ####                  )
+            ####              convert_and_print(input_number, base, is_bold=True)
+            ####              console.print("")
+            ####  except SystemExit:
             try:
                 args = parser.parse_args(cmd.split())
-                input_number = args.number.replace(" ", "")
-                specified_base = None
+                # 1. Parse specified output bases
+                output_bases = None
+                if getattr(args, "output", None):
+                    output_bases = set()
+                    out_map = {"16": 16, "hex": 16, "10": 10, "dec": 10, "8": 8, "oct": 8, "2": 2, "bin": 2}
+                    for o in args.output:
+                        for val in o.replace(",", " ").split():
+                            if val.lower() in out_map:
+                                output_bases.add(out_map[val.lower()])
 
-                # Determine which base flag was provided
+                # 2. Extract and flatten multiple input numbers
+                input_numbers = []
+                for num_str in args.number:
+                    input_numbers.extend([n for n in num_str.replace(",", " ").split() if n])
+
+                # 3. Determine if an explicit input base flag was provided
+                flag_base = None
                 for flag, base in BASE_MAP.items():
                     if getattr(args, flag.lstrip("-").replace("-", "_")):
-                        specified_base = base
+                        flag_base = base
                         break
 
-                for base, preffix in PREFIXES.items():
-                    if input_number.startswith(preffix):
-                        specified_base = base
-                        break
+                # 4. Process each number iteratively
+                for input_number in input_numbers:
+                    if len(input_numbers) > 1:
+                        console.print(f"\n[bold blue]--- {input_number} ---[/]")
 
-                if specified_base:
-                    convert_and_print(input_number, specified_base, is_bold=True)
-                else:
-                    # Try all possible bases
-                    valid_bases = []
-                    for base in [16, 10, 8, 2]:
-                        if is_valid_number(input_number, base):
-                            valid_bases.append(base)
+                    specified_base = flag_base
 
-                    if not valid_bases:
-                        console.print(
-                            "[bold red]Error:[/] The number is not valid in any supported base."
-                        )
-                        continue
+                    if not specified_base:
+                        for base, preffix in PREFIXES.items():
+                            if input_number.lower().startswith(preffix):
+                                specified_base = base
+                                break
 
-                    for base in valid_bases:
-                        if len(valid_bases) > 1:
-                            console.print(
-                                f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
-                            )
-                        convert_and_print(input_number, base, is_bold=True)
-                        console.print("")
+                    if specified_base:
+                        convert_and_print(input_number, specified_base, is_bold=True, output_bases=output_bases)
+                    else:
+                        valid_bases = []
+                        for base in [16, 10, 8, 2]:
+                            if is_valid_number(input_number, base):
+                                valid_bases.append(base)
+
+                        if not valid_bases:
+                            console.print(f"[bold red]Error:[/] '{input_number}' is not valid in any supported base.")
+                            continue
+
+                        for base in valid_bases:
+                            if len(valid_bases) > 1:
+                                console.print(f"[bold]Base not specified. Assuming {base}-base interpretation:[/]")
+                            convert_and_print(input_number, base, is_bold=True, output_bases=output_bases)
+                            console.print("")
             except SystemExit:
-                # argparse may call sys.exit() on bad arguments; just catch to avoid exiting
                 pass
+                # argparse may call sys.exit() on bad arguments; just catch to avoid exiting
         return
     # --- End interactive mode ---
 
     parser = argparse.ArgumentParser(
         description="Convert a number from any base to all others."
     )
-    parser.add_argument("number", help="The number to be converted.")
+    ####  parser.add_argument("number", help="The number to be converted.")
+    parser.add_argument(
+            "number", nargs="+", help="The number(s) to be converted (space or comma separated)."
+        )
+    parser.add_argument(
+        "--out", "--output", dest="output", nargs="+",
+        help="Specify bases to output (e.g., 2 10 16 or hex dec)."
+    )
     for flag, base in BASE_MAP.items():
         parser.add_argument(
             flag,
@@ -151,38 +225,91 @@ def main():
     specified_base = None
 
     # Determine which base flag was provided
+    # 1. Parse specified output bases
+    output_bases = None
+    if getattr(args, "output", None):
+        output_bases = set()
+        out_map = {"16": 16, "hex": 16, "10": 10, "dec": 10, "8": 8, "oct": 8, "2": 2, "bin": 2}
+        for o in args.output:
+            for val in o.replace(",", " ").split():
+                if val.lower() in out_map:
+                    output_bases.add(out_map[val.lower()])
+
+    # 2. Extract and flatten multiple input numbers (handles both commas and spaces)
+    input_numbers = []
+    for num_str in args.number:
+        input_numbers.extend([n for n in num_str.replace(",", " ").split() if n])
+
+    # 3. Determine if an explicit input base flag was provided
+    flag_base = None
     for flag, base in BASE_MAP.items():
         if getattr(args, flag.lstrip("-").replace("-", "_")):
-            specified_base = base
+            flag_base = base
             break
 
-    for base, preffix in PREFIXES.items():
-        if input_number.startswith(preffix):
-            specified_base = base
-            break
+    # 4. Process each number iteratively
+    for input_number in input_numbers:
+        if len(input_numbers) > 1:
+            console.print(f"\n[bold blue]--- {input_number} ---[/]")
 
-    if specified_base:
-        convert_and_print(input_number, specified_base, is_bold=True)
-    else:
-        # Try all possible bases
-        valid_bases = []
-        for base in [16, 10, 8, 2]:
-            if is_valid_number(input_number, base):
-                valid_bases.append(base)
+        specified_base = flag_base
 
-        if not valid_bases:
-            console.print(
-                "[bold red]Error:[/] The number is not valid in any supported base."
-            )
-            sys.exit(1)
+        if not specified_base:
+            for base, preffix in PREFIXES.items():
+                if input_number.lower().startswith(preffix):
+                    specified_base = base
+                    break
 
-        for base in valid_bases:
-            if len(valid_bases) > 1:
-                console.print(
-                    f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
-                )
-            convert_and_print(input_number, base, is_bold=True)
-            console.print("")
+        if specified_base:
+            convert_and_print(input_number, specified_base, is_bold=True, output_bases=output_bases)
+        else:
+            # Try all possible bases
+            valid_bases = []
+            for base in [16, 10, 8, 2]:
+                if is_valid_number(input_number, base):
+                    valid_bases.append(base)
+
+            if not valid_bases:
+                console.print(f"[bold red]Error:[/] '{input_number}' is not valid in any supported base.")
+                continue
+
+            for base in valid_bases:
+                if len(valid_bases) > 1:
+                    console.print(f"[bold]Base not specified. Assuming {base}-base interpretation:[/]")
+                convert_and_print(input_number, base, is_bold=True, output_bases=output_bases)
+                console.print("")
+    ####  for flag, base in BASE_MAP.items():
+    ####      if getattr(args, flag.lstrip("-").replace("-", "_")):
+    ####          specified_base = base
+    ####          break
+
+    ####  for base, preffix in PREFIXES.items():
+    ####      if input_number.startswith(preffix):
+    ####          specified_base = base
+    ####          break
+
+    ####  if specified_base:
+    ####      convert_and_print(input_number, specified_base, is_bold=True)
+    ####  else:
+    ####      # Try all possible bases
+    ####      valid_bases = []
+    ####      for base in [16, 10, 8, 2]:
+    ####          if is_valid_number(input_number, base):
+    ####              valid_bases.append(base)
+
+    ####      if not valid_bases:
+    ####          console.print(
+    ####              "[bold red]Error:[/] The number is not valid in any supported base."
+    ####          )
+    ####          sys.exit(1)
+
+    ####      for base in valid_bases:
+    ####          if len(valid_bases) > 1:
+    ####              console.print(
+    ####                  f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
+    ####              )
+    ####          convert_and_print(input_number, base, is_bold=True)
+    ####          console.print("")
 
 
 if __name__ == "__main__":
