@@ -1,0 +1,189 @@
+#! /bin/python3.10
+import argparse
+import sys
+from rich.console import Console
+from rich.text import Text
+
+console = Console()
+
+# Define supported bases
+BASE_MAP = {
+    "-x": 16,
+    "--hex": 16,
+    "-d": 10,
+    "--decimal": 10,
+    "-o": 8,
+    "--octal": 8,
+    "-b": 2,
+    "--binary": 2,
+}
+
+# Define colors for each base
+COLORS = {16: "cyan", 10: "green", 8: "yellow", 2: "magenta"}
+
+# Define base names and prefixes
+BASES = [(16, "cyan"), (10, "green"), (8, "yellow"), (2, "magenta")]
+PREFIXES = {16: "0x", 10: "  ", 8: "0o", 2: "0b"}
+BASE_NAMES = {16: "Hex", 10: "Dec", 8: "Oct", 2: "Bin"}
+
+
+def is_valid_number(number: str, base: int) -> bool:
+    try:
+        int(number, base)
+        return True
+    except ValueError:
+        return False
+
+
+def convert_and_print(number: str, input_base: int, is_bold=False):
+    if not is_valid_number(number, input_base):
+        console.print(
+            f"[bold red]Error:[/] '{number}' is not a valid number in base {input_base}."
+        )
+        sys.exit(1)
+
+    decimal_value = int(number, input_base)
+    for base, color in BASES:
+        prefix = PREFIXES[base]
+        base_name = BASE_NAMES[base]
+        formatted_value = {
+            16: f"{decimal_value:X}",
+            10: f"{decimal_value}",
+            8: f"{oct(decimal_value)[2:]}",
+            2: f"{bin(decimal_value)[2:]}",
+        }[base]
+
+        style = f"bold {color}" if base == input_base and is_bold else color
+
+        # Build our final output line
+        output_line = f"{base_name}: [red]{prefix}[/][{style}]{formatted_value}[/]"
+
+        # If base 2, also show grouped bits in parentheses
+        if base == 2:
+            bin_value = formatted_value
+            remainder = len(bin_value) % 4
+            if remainder != 0:
+                bin_value = ("0" * (4 - remainder)) + bin_value
+            groups = [bin_value[i : i + 4] for i in range(0, len(bin_value), 4)]
+            grouped = " ".join(groups)
+            output_line += f" ([bold]{grouped}[/])"
+
+        console.print(output_line)
+
+
+def main():
+    # --- Interactive mode when no arguments are provided ---
+    if len(sys.argv) == 1:
+        parser = argparse.ArgumentParser(
+            description="Convert a number from any base to all others."
+        )
+        parser.add_argument("number", help="The number to be converted.")
+        for flag, base in BASE_MAP.items():
+            parser.add_argument(
+                flag,
+                help=f"Specify that the number is in base {base}.",
+                action="store_true",
+            )
+
+        while True:
+            cmd = console.input("[bold green]baseconv> [/]")
+            if cmd.strip().lower().replace(":","") in ["q", "quit", "exit", "wq"]:
+                break
+            if not cmd.strip():
+                continue
+            try:
+                args = parser.parse_args(cmd.split())
+                input_number = args.number.replace(" ", "")
+                specified_base = None
+
+                # Determine which base flag was provided
+                for flag, base in BASE_MAP.items():
+                    if getattr(args, flag.lstrip("-").replace("-", "_")):
+                        specified_base = base
+                        break
+
+                for base, preffix in PREFIXES.items():
+                    if input_number.startswith(preffix):
+                        specified_base = base
+                        break
+
+                if specified_base:
+                    convert_and_print(input_number, specified_base, is_bold=True)
+                else:
+                    # Try all possible bases
+                    valid_bases = []
+                    for base in [16, 10, 8, 2]:
+                        if is_valid_number(input_number, base):
+                            valid_bases.append(base)
+
+                    if not valid_bases:
+                        console.print(
+                            "[bold red]Error:[/] The number is not valid in any supported base."
+                        )
+                        continue
+
+                    for base in valid_bases:
+                        if len(valid_bases) > 1:
+                            console.print(
+                                f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
+                            )
+                        convert_and_print(input_number, base, is_bold=True)
+                        console.print("")
+            except SystemExit:
+                # argparse may call sys.exit() on bad arguments; just catch to avoid exiting
+                pass
+        return
+    # --- End interactive mode ---
+
+    parser = argparse.ArgumentParser(
+        description="Convert a number from any base to all others."
+    )
+    parser.add_argument("number", help="The number to be converted.")
+    for flag, base in BASE_MAP.items():
+        parser.add_argument(
+            flag,
+            help=f"Specify that the number is in base {base}.",
+            action="store_true",
+        )
+
+    args = parser.parse_args()
+    input_number = args.number.replace(" ", "")
+    specified_base = None
+
+    # Determine which base flag was provided
+    for flag, base in BASE_MAP.items():
+        if getattr(args, flag.lstrip("-").replace("-", "_")):
+            specified_base = base
+            break
+
+    for base, preffix in PREFIXES.items():
+        if input_number.startswith(preffix):
+            specified_base = base
+            break
+
+    if specified_base:
+        convert_and_print(input_number, specified_base, is_bold=True)
+    else:
+        # Try all possible bases
+        valid_bases = []
+        for base in [16, 10, 8, 2]:
+            if is_valid_number(input_number, base):
+                valid_bases.append(base)
+
+        if not valid_bases:
+            console.print(
+                "[bold red]Error:[/] The number is not valid in any supported base."
+            )
+            sys.exit(1)
+
+        for base in valid_bases:
+            if len(valid_bases) > 1:
+                console.print(
+                    f"[bold]Base not specified. Assuming {base}-base interpretation:[/]"
+                )
+            convert_and_print(input_number, base, is_bold=True)
+            console.print("")
+
+
+if __name__ == "__main__":
+    main()
